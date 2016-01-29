@@ -1,0 +1,25 @@
+{
+  "name": "biologis/jira-php-api",
+  "description": "A php library that provides functions to access JIRA's REST API using guzzle.",
+  "license": "GPL-2.0+",
+  "keywords": ["jira","REST"],
+  "authors": [
+    {
+      "name": "Tim Seifert",
+      "email": "tim.seifert@gim.biologisgroup.com",
+      "homepage": "http://www.gim.biologisgroup.com",
+      "role": "Developer"
+    }
+  ],
+  "require": {
+    "guzzlehttp/guzzle": "^6.1",
+    "symfony/dependency-injection": "^3.0"
+  },
+  "require-dev": {
+  },
+  "autoload": {
+    "psr-4": {
+      "biologis\\JIRA_PHP_API\\": "src"
+    }
+  }
+}
