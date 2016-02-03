@@ -19,14 +19,13 @@ class Issue extends GenericJiraObject {
    * Whether this issue is fully loaded or not.
    * @var bool
    */
-  private $isLoaded;
+  private $loaded;
 
   /**
    * Whether this issue is stored in JIRA or not.
    * @var bool
    */
-  private $isPersistent;
-
+  private $persistent;
 
   /**
    * ID of this issue.
@@ -40,6 +39,19 @@ class Issue extends GenericJiraObject {
    */
   private $key;
 
+  /**
+   * An array of \biologis\JIRA_PHP_API\Issue objects (sub tasks)
+   * @var array
+   */
+  private $subIssues;
+
+  /**
+   * If this is a sub task, it will have a parent issue associated.
+   * If not, this value will be null.
+   * @var \biologis\JIRA_PHP_API\Issue
+   */
+  private $parent;
+
 
   /**
    * Issue constructor.
@@ -47,22 +59,24 @@ class Issue extends GenericJiraObject {
    * @param \biologis\JIRA_PHP_API\GenericJiraObject|NULL $initObject this object will be merged into the issue
    * @param bool $isLoaded false if initObject might not contain all data of the issue
    */
-  public function __construct(IssueService $issueService, GenericJiraObject $initObject = null, $isLoaded = false) {
+  public function __construct(IssueService $issueService, GenericJiraObject $initObject = null, $isLoaded = false, $parent = null) {
     parent::__construct();
 
     $this->issueService = $issueService;
     $this->value = array();
+    $this->parent = $parent;
 
     if ($initObject == null) {
-      $this->isPersistent = false;
+      $this->persistent = false;
       $this->initializeIssueStub();
     }
     else {
-      $this->isPersistent = true;
+      $this->persistent = true;
       $this->initialize($initObject);
     }
 
-    $this->isLoaded = $isLoaded;
+    $this->loaded = $isLoaded;
+    $this->subIssues = array();
   }
 
 
@@ -74,7 +88,7 @@ class Issue extends GenericJiraObject {
     if (property_exists($this, $name)) {
       return $this->{$name};
     }
-    elseif ($this->isPersistent && !$this->isLoaded) {
+    elseif ($this->persistent && !$this->loaded) {
       if (!empty($this->key) || !empty($this->id)) {
         $key = $this->key;
 
@@ -88,7 +102,7 @@ class Issue extends GenericJiraObject {
           $response = GenericJiraObject::transformStdClassToGenericJiraObject($response);
 
           $this->merge($response);
-          $this->isLoaded = true;
+          $this->loaded = true;
         }
         else {
           return null;
@@ -96,7 +110,7 @@ class Issue extends GenericJiraObject {
       }
       else {
         // misconfigured object that is persistent, but does not have an id or key
-        $this->isPersistent = false;
+        $this->persistent = false;
       }
 
       return $this->__get($name);
@@ -108,15 +122,66 @@ class Issue extends GenericJiraObject {
 
 
   /**
+   * @return boolean
+   */
+  public function isLoaded() {
+    return $this->loaded;
+  }
+
+
+  /**
+   * @return boolean
+   */
+  public function isPersistent() {
+    return $this->persistent;
+  }
+
+
+  /**
+   * @return int
+   */
+  public function getId() {
+    return $this->id;
+  }
+
+
+  /**
+   * @return string
+   */
+  public function getKey() {
+    return $this->key;
+  }
+
+
+  /**
+   * @return Issue
+   */
+  public function getParent() {
+    return $this->parent;
+  }
+
+
+  /**
    * Either updates or creates this issue in JIRA.
    *
    * @return bool
    */
   public function save() {
+    // if this is a sub task, assure that parent is persistent and that parent information exists
+    if (!empty($this->parent)) {
+      if (!$this->parent->isPersistent()) {
+        return false;
+      }
+
+      if (!$this->persistent && empty($this->fields->parent->getKey()) && empty($this->fields->parent->getId())) {
+        return false;
+      }
+    }
+
     $this->createDiffObject();
 
     // update if this issue is already persistent in jira
-    if ($this->isPersistent) {
+    if ($this->persistent) {
       // if nothing changed, fake storage
       if (!empty((array) $this->getDiffObject())) {
         $issue_identifier = '';
@@ -155,7 +220,17 @@ class Issue extends GenericJiraObject {
           if (!empty($response->id) && !empty($response->key)) {
             $this->merge($response);
             $this->resetPropertyChangelist();
-            $this->isPersistent = true;
+            $this->persistent = true;
+
+            // refresh parent reference for sub task elements (if required)
+            foreach ($this->subIssues as $sub_issue) {
+              if (!empty($this->key)) {
+                $sub_issue->fields->parent->setKey($this->key);
+              }
+              else {
+                $sub_issue->fields->parent->setId($this->id);
+              }
+            }
           }
           else {
             // this exception only occurs if JIRA does not provide data of the created issue
@@ -177,10 +252,76 @@ class Issue extends GenericJiraObject {
 
 
   /**
+   * Returns all sub tasks of this issue as an array of Issue objects.
+   * If no sub tasks exist, false is returned.
+   * If this is a sub tasks, false is returned.
+   *
+   * @return array|bool
+   */
+  public function getSubIssues() {
+    if (empty($this->parent)) {  // only issues without parents can have sub tasks
+      $sub_issue_array = $this->fields->subtasks;
+
+      // FIXME sub tasks will never loaded if one was created before
+      if (!empty($sub_issue_array) && empty($this->subIssues)) {
+        // transform GenericJiraObjects to Issues
+        foreach ($sub_issue_array as $sub_issue) {
+          $this->subIssues[$sub_issue->key] = new Issue($this->issueService, $sub_issue, false, $this);
+        }
+
+        return $this->subIssues;
+      }
+      elseif (!empty($this->subIssues)) {
+        return $this->subIssues;
+      }
+    }
+
+    return false;
+  }
+
+
+  /**
+   * Creates a sub task and returns it as \biologis\JIRA_PHP_API\Issue object.
+   * The issue is also stored in this Issues sub issue list.
+   * If this is a sub issue (has parent), do not create an issue and return false.
+   *
+   * @return \biologis\JIRA_PHP_API\Issue|bool
+   */
+  public function createSubIssue() {
+    $sub_issue = false;
+
+    if (empty($this->parent)) { // only create sub task if this issue has no parent
+      $sub_issue = new Issue($this->issueService, null, false, $this);
+      $this->subIssues[] = $sub_issue;
+
+      $parent = $sub_issue->fields->addGenericJiraObject('parent');
+
+      if ($this->isPersistent()) {
+        if (!empty($this->key)) {
+          $parent->setKey($this->key);
+        }
+        elseif (!empty($this->id)) {
+          $parent->setId($this->id);
+        }
+
+        if (!empty($this->fields->project->key)) {
+          $sub_issue->fields->project->setKey($this->fields->project->key);
+        }
+        elseif (!empty($this->fields->project->id)) {
+          $sub_issue->fields->project->setId($this->fields->project->id);
+        }
+      }
+    }
+
+    return $sub_issue;
+  }
+
+
+  /**
    * @param \biologis\JIRA_PHP_API\GenericJiraObject $object
    */
   private function initialize(GenericJiraObject $object) {
-    if (!$this->isLoaded && $this->isPersistent) {
+    if (!$this->loaded && $this->persistent) {
       $this->merge($object);
 
       // a persistent issue requires at least a key or id
@@ -189,6 +330,11 @@ class Issue extends GenericJiraObject {
 
       if (!$key_exists || !$id_exists) {
         throw new \UnexpectedValueException('Loaded issue does not provide any key or id property.');
+      }
+
+      // identify if this is a sub task, if yes, add parent object
+      if (!empty($this->fields->parent)) {
+        $this->parent = new Issue($this->issueService, $this->fields->parent);
       }
     }
   }
