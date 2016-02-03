@@ -46,7 +46,17 @@ class GenericJiraObject {
         $transformed_object->{$property->getName()} = self::transformStdClassToGenericJiraObject($property->getValue($data));
       }
       else {
-        $transformed_object->{$property->getName()} = $property->getValue($data);
+        $property_value = $property->getValue($data);
+
+        if (is_array($property_value)) { // we do not support objects hidden in arrays of arrays
+          foreach ($property_value as $array_key => $array_element) {
+            if (is_object($array_element) && is_a($array_element, 'stdClass')) {
+              $property_value[$array_key] = self::transformStdClassToGenericJiraObject($array_element);
+            }
+          }
+        }
+
+        $transformed_object->{$property->getName()} = $property_value;
       }
     }
 
