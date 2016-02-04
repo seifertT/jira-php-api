@@ -96,7 +96,7 @@ class Issue extends GenericJiraObject {
           $key = $this->id;
         }
 
-        $response = $this->communicationService->get('issue/' . $key);
+        $response = $this->issueService->getCommunicationService()->get('issue/' . $key);
 
         if ($response) {
           $response = GenericJiraObject::transformStdClassToGenericJiraObject($response);
