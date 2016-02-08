@@ -7,7 +7,7 @@ namespace biologis\JIRA_PHP_API;
  * Class Issue
  * @package biologis\JIRA_PHP_API
  */
-class Issue extends GenericJiraObject {
+class Issue extends GenericJiraObject implements IGenericJiraObjectRoot {
 
   /**
    * Reference to the IssueService that generated this issue.
@@ -62,6 +62,7 @@ class Issue extends GenericJiraObject {
   public function __construct(IssueService $issueService, GenericJiraObject $initObject = null, $isLoaded = false, $parent = null) {
     parent::__construct();
 
+    $this->loaded = false;
     $this->issueService = $issueService;
     $this->value = array();
     $this->parent = $parent;
@@ -77,47 +78,6 @@ class Issue extends GenericJiraObject {
 
     $this->loaded = $isLoaded;
     $this->subIssues = array();
-  }
-
-
-  /**
-   * @param string $name
-   * @return mixed the property or null if it does not exist
-   */
-  public function __get($name) {
-    if (property_exists($this, $name)) {
-      return $this->{$name};
-    }
-    elseif ($this->persistent && !$this->loaded) {
-      if (!empty($this->key) || !empty($this->id)) {
-        $key = $this->key;
-
-        if (empty($key)) {
-          $key = $this->id;
-        }
-
-        $response = $this->issueService->getCommunicationService()->get('issue/' . $key);
-
-        if ($response) {
-          $response = GenericJiraObject::transformStdClassToGenericJiraObject($response);
-
-          $this->merge($response);
-          $this->loaded = true;
-        }
-        else {
-          return null;
-        }
-      }
-      else {
-        // misconfigured object that is persistent, but does not have an id or key
-        $this->persistent = false;
-      }
-
-      return $this->__get($name);
-    }
-    else {
-      return null;
-    }
   }
 
 
@@ -158,6 +118,16 @@ class Issue extends GenericJiraObject {
    */
   public function getParent() {
     return $this->parent;
+  }
+
+
+  /**
+   * Creates a diff object and returns if there are some changes to save or not.
+   *
+   * @return bool
+   */
+  public function hasChanges() {
+    return (bool) count($this->createDiffObject());
   }
 
 
@@ -269,6 +239,7 @@ class Issue extends GenericJiraObject {
           $this->subIssues[$sub_issue->key] = new Issue($this->issueService, $sub_issue, false, $this);
         }
 
+        $this->fields->subtasks = array();
         return $this->subIssues;
       }
       elseif (!empty($this->subIssues)) {
@@ -347,6 +318,8 @@ class Issue extends GenericJiraObject {
     foreach ($object as $key => $value) {
       $this->{$key} = $value;
     }
+
+    $this->setGenericJiraObjectRootRecursive($this);
   }
 
 
@@ -382,5 +355,43 @@ class Issue extends GenericJiraObject {
     $issuetype_id_exists = !empty($diffObject->fields->issuetype->id);
 
     return ($project_key_exists || $project_id_exists) && $summary_exists && $description_exists && ($issuetype_name_exists || $issuetype_id_exists);
+  }
+
+
+  /**
+   * Loads additional data from JIRA if this issue has not been fully loaded (e.g. sub task of loaded issue)
+   */
+  public function loadData() {
+    if ($this->persistent && !$this->loaded) {
+      if (!empty($this->key) || !empty($this->id)) {
+        $key = $this->key;
+
+        if (empty($key)) {
+          $key = $this->id;
+        }
+
+        $response = $this->issueService->getCommunicationService()->get('issue/' . $key);
+
+        if ($response) {
+          $response = GenericJiraObject::transformStdClassToGenericJiraObject($response);
+
+          $this->merge($response);
+          $this->loaded = true;
+        }
+      }
+      else {
+        // misconfigured object that is persistent, but does not have an id or key
+        $this->persistent = false;
+      }
+    }
+  }
+
+
+  /**
+   * Return communication service.
+   * @return \biologis\JIRA_PHP_API\ICommunicationService
+   */
+  public function getCommunicationService() {
+    return $this->issueService->getCommunicationService();
   }
 }

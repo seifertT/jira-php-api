@@ -29,6 +29,12 @@ class GenericJiraObject {
 
 
   /**
+   * @var IGenericJiraObjectRoot
+   */
+  private $genericJiraObjectRoot;
+
+
+  /**
    * Transforms a stdClass Object and all its child Objects to GeneralJiraObjects.
    * The object to copy will not be modified, a GeneralJiraObject copy is returned.
    *
@@ -36,27 +42,24 @@ class GenericJiraObject {
    * @return \biologis\JIRA_PHP_API\GenericJiraObject copy of $data were stdClass is replaced with GenericJiraObject
    */
   public static function transformStdClassToGenericJiraObject(\stdClass $data) {
-    $reflection = new \ReflectionObject($data);
-    $properties = $reflection->getProperties();
-
     $transformed_object = new GenericJiraObject();
 
-    foreach ($properties as $property) {
-      if (is_object($property->getValue($data)) && is_a($property->getValue($data), 'stdClass')) {
-        $transformed_object->{$property->getName()} = self::transformStdClassToGenericJiraObject($property->getValue($data));
+    foreach ($data as $propertyKey => $propertyValue) {
+      if (is_a($propertyValue, 'stdClass')) {
+        $transformed_object->{$propertyKey} = self::transformStdClassToGenericJiraObject($propertyValue);
       }
       else {
-        $property_value = $property->getValue($data);
+        $propertyValueTransformed = $propertyValue;
 
-        if (is_array($property_value)) { // we do not support objects hidden in arrays of arrays
-          foreach ($property_value as $array_key => $array_element) {
-            if (is_object($array_element) && is_a($array_element, 'stdClass')) {
-              $property_value[$array_key] = self::transformStdClassToGenericJiraObject($array_element);
+        if (is_array($propertyValueTransformed)) { // we do not support objects hidden in arrays of arrays
+          foreach ($propertyValueTransformed as $array_key => $array_element) {
+            if (is_a($array_element, 'stdClass')) {
+              $propertyValueTransformed[$array_key] = self::transformStdClassToGenericJiraObject($array_element);
             }
           }
         }
 
-        $transformed_object->{$property->getName()} = $property_value;
+        $transformed_object->{$propertyKey} = $propertyValueTransformed;
       }
     }
 
@@ -67,7 +70,8 @@ class GenericJiraObject {
   /**
    * GenericJiraObject constructor.
    */
-  function __construct() {
+  function __construct($genericJiraObjectRoot = null) {
+    $this->genericJiraObjectRoot = $genericJiraObjectRoot;
     $this->propertyChanges = array();
     $this->diffObject = new \stdClass();
     $this->initialReflectionObject = new \ReflectionObject($this);
@@ -96,22 +100,42 @@ class GenericJiraObject {
     if (strpos($name, 'get') === 0) {
       $propertyName = lcfirst(substr($name, 3));
 
+      if (!property_exists($this, $propertyName) && $this->genericJiraObjectRoot != null) {
+        $this->genericJiraObjectRoot->loadData();
+      }
+
       if (property_exists($this, $propertyName)) {
         return $this->{$propertyName};
       }
+
+      return null;
     }
 
     if (strpos($name, 'set') === 0 && sizeof($arguments) == 1) {
       $propertyName = lcfirst(substr($name, 3));
 
       // never allow setting of private or protected properties
-      if (!$this->initialReflectionObject->hasProperty($propertyName) || !$this->initialReflectionObject->getProperty($propertyName)->isPrivate()) {
+      if (!$this->initialReflectionObject->hasProperty($propertyName) || $this->initialReflectionObject->getProperty($propertyName)->isPublic()) {
         // do nothing if nothing changed
         if (!property_exists($this, $propertyName) || $this->{$propertyName} != $arguments[0]) {
           $this->{$propertyName} = $arguments[0];
           $this->propertyChanges[] = $propertyName;
         }
       }
+    }
+  }
+
+
+  /**
+   * @param string $name
+   * @return mixed the property or null if it does not exist
+   */
+  public function __get($name) {
+    if (property_exists($this, $name)) {
+      return $this->{$name};
+    }
+    else {
+      return null;
     }
   }
 
@@ -128,7 +152,7 @@ class GenericJiraObject {
       $this->{$name} = new GenericJiraObject();
     }
     else {
-      if (!is_object($this->{$name}) || !is_a($this->{$name}, 'biologis\JIRA_PHP_API\GenericJiraObject')) {
+      if (!is_a($this->{$name}, 'biologis\JIRA_PHP_API\GenericJiraObject')) {
         return null;
       }
     }
@@ -150,7 +174,7 @@ class GenericJiraObject {
 
     foreach ($public_properties as $public_property) {
 
-      if (is_object($public_property->getValue($this)) && is_a($public_property->getValue($this), 'biologis\JIRA_PHP_API\GenericJiraObject')) {
+      if (is_a($public_property->getValue($this), 'biologis\JIRA_PHP_API\GenericJiraObject')) {
         $subDiffObject = $public_property->getValue($this)->createDiffObject();
 
         // do not store if empty
@@ -176,11 +200,32 @@ class GenericJiraObject {
     $public_properties = $reflection->getProperties(\ReflectionProperty::IS_PUBLIC);
 
     foreach ($public_properties as $public_property) {
-      if (is_object($public_property->getValue($this)) && is_a($public_property->getValue($this), 'biologis\JIRA_PHP_API\GenericJiraObject')) {
+      if (is_a($public_property->getValue($this), 'biologis\JIRA_PHP_API\GenericJiraObject')) {
         $public_property->getValue($this)->resetPropertyChangelist();
       }
     }
 
     $this->propertyChanges = array();
+  }
+
+  public function setGenericJiraObjectRootRecursive($gJORoot) {
+    $this->genericJiraObjectRoot = $gJORoot;
+
+    foreach ($this as $propertyKey => $propertyValue) {
+      // only access public properties
+      if (!$this->initialReflectionObject->hasProperty($propertyKey) || $this->initialReflectionObject->getProperty($propertyKey)->isPublic()) {
+        // never traverse a non GenericJiraObject or a root object
+        if (is_a($propertyValue, 'biologis\JIRA_PHP_API\GenericJiraObject') && !is_a($propertyValue, 'biologis\JIRA_PHP_API\IGenericJiraObjectRoot')) {
+          $propertyValue->setGenericJiraObjectRootRecursive($gJORoot);
+        }
+        elseif (is_array($propertyValue)) { // we do not support objects hidden in arrays of arrays
+          foreach($propertyValue as $arrayValue) {
+            if (is_a($arrayValue, 'biologis\JIRA_PHP_API\GenericJiraObject') && !is_a($arrayValue, 'biologis\JIRA_PHP_API\IGenericJiraObjectRoot')) {
+              $arrayValue->setGenericJiraObjectRootRecursive($gJORoot);
+            }
+          }
+        }
+      }
+    }
   }
 }
