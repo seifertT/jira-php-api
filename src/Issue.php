@@ -127,7 +127,7 @@ class Issue extends GenericJiraObject implements IGenericJiraObjectRoot {
    * @return bool
    */
   public function hasChanges() {
-    return (bool) count($this->createDiffObject());
+    return empty((array)$this->createDiffObject());
   }
 
 
