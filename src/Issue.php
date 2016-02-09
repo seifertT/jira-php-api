@@ -31,13 +31,13 @@ class Issue extends GenericJiraObject implements IGenericJiraObjectRoot {
    * ID of this issue.
    * @var int
    */
-  private $id;
+  public $id;
 
   /**
    * Key of this issue.
    * @var string
    */
-  private $key;
+  public $key;
 
   /**
    * An array of \biologis\JIRA_PHP_API\Issue objects (sub tasks)
@@ -314,10 +314,8 @@ class Issue extends GenericJiraObject implements IGenericJiraObjectRoot {
   /**
    * @param \biologis\JIRA_PHP_API\GenericJiraObject $object
    */
-  private function merge(GenericJiraObject $object) {
-    foreach ($object as $key => $value) {
-      $this->{$key} = $value;
-    }
+  protected function merge(GenericJiraObject $object) {
+    parent::merge($object);
 
     $this->setGenericJiraObjectRootRecursive($this);
   }

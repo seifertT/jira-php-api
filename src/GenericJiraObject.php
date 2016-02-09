@@ -14,24 +14,24 @@ class GenericJiraObject {
    * Array that stores the name of non-GenericJiraObjects that have been added or changed.
    * @var array
    */
-  private $propertyChanges;
+  protected $propertyChanges;
 
   /**
    * @var \stdClass
    */
-  private $diffObject;
+  protected $diffObject;
 
   /**
    * Reflection of this object in its initial state.
    * @var \ReflectionObject
    */
-  private $initialReflectionObject;
+  protected $initialReflectionObject;
 
 
   /**
    * @var IGenericJiraObjectRoot
    */
-  private $genericJiraObjectRoot;
+  protected $genericJiraObjectRoot;
 
 
   /**
@@ -100,7 +100,7 @@ class GenericJiraObject {
     if (strpos($name, 'get') === 0) {
       $propertyName = lcfirst(substr($name, 3));
 
-      if (!property_exists($this, $propertyName) && $this->genericJiraObjectRoot != null) {
+      if ($this->genericJiraObjectRoot != null) {
         $this->genericJiraObjectRoot->loadData();
       }
 
@@ -208,7 +208,7 @@ class GenericJiraObject {
     $this->propertyChanges = array();
   }
 
-  public function setGenericJiraObjectRootRecursive($gJORoot) {
+  protected function setGenericJiraObjectRootRecursive($gJORoot) {
     $this->genericJiraObjectRoot = $gJORoot;
 
     foreach ($this as $propertyKey => $propertyValue) {
@@ -224,6 +224,26 @@ class GenericJiraObject {
               $arrayValue->setGenericJiraObjectRootRecursive($gJORoot);
             }
           }
+        }
+      }
+    }
+  }
+
+  /**
+   * @param \biologis\JIRA_PHP_API\GenericJiraObject $object
+   */
+  protected function merge(GenericJiraObject $object) {
+
+    foreach ($object as $propertyName => $propertyValue) {
+      // only merge public properties
+      if (!$this->initialReflectionObject->hasProperty($propertyName) || $this->initialReflectionObject->getProperty($propertyName)->isPublic()) {
+        // FIXME this should only be a short term approach; we can not merge objects in arrays, because we have no guarantee that they are in the same order
+        // FIXME this would require some kind of comparator (e.g. key, id)
+        if (property_exists($this, $propertyName) && is_a($this->{$propertyName}, 'biologis\JIRA_PHP_API\GenericJiraObject') && is_a($propertyValue, 'biologis\JIRA_PHP_API\GenericJiraObject')) {
+          $this->{$propertyName}->merge($propertyValue);
+        }
+        else {
+          $this->{$propertyName} = $propertyValue;
         }
       }
     }
