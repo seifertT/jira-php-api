@@ -392,4 +392,27 @@ class Issue extends GenericJiraObject implements IGenericJiraObjectRoot {
   public function getCommunicationService() {
     return $this->issueService->getCommunicationService();
   }
+
+
+  /**
+   * Adds and saves a comment.
+   * @param $comment
+   * @param bool $forceSave
+   * @return bool
+   */
+  public function addComment($comment, $forceSave = false) {
+    if ($forceSave) {
+      $this->save();
+    }
+
+    if (empty($this->getId())) {
+      return false;
+    }
+
+    $commentService = CommentService::getCommentService($this->getCommunicationService());
+    
+    $commentObject = $commentService->create($this->getId());
+    $commentObject->setComment($comment);
+    return $commentObject->save();
+  }
 }
