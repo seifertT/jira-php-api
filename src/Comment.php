@@ -76,9 +76,9 @@ class Comment {
           $this->commentID = $response->id;
         }
         else {
-          // this exception only occurs if JIRA does not provide data of the created issue
-          // if save() is executed again, it would create another issue with the same data instead of updating the current one
-          throw new \RuntimeException('The issue was created but this object could not be linked to it.');
+          // this exception only occurs if JIRA does not provide data of the created comment
+          // if save() is executed again, it would create another comment with the same data instead of updating the current one
+          throw new \RuntimeException('The comment was created but this object could not be linked to it.');
         }
       }
     }
