@@ -7,32 +7,7 @@ namespace biologis\JIRA_PHP_API;
  * Class IssueService
  * @package biologis\JIRA_PHP_API
  */
-class IssueService {
-
-
-  /**
-   * @var \biologis\JIRA_PHP_API\ICommunicationService
-   */
-  private $communicationService;
-
-
-  /**
-   * IssueService constructor.
-   * @param \biologis\JIRA_PHP_API\ICommunicationService $comService
-   */
-  function __construct(ICommunicationService $comService) {
-    $this->communicationService = $comService;
-  }
-
-
-  /**
-   * @return \biologis\JIRA_PHP_API\ICommunicationService
-   */
-  public function getCommunicationService() {
-    return $this->communicationService;
-  }
-
-
+class IssueService extends AService {
   /**
    * Creates a new JIRA issue search.
    * @return \biologis\JIRA_PHP_API\Search
@@ -56,7 +31,7 @@ class IssueService {
       'expand' => '',
     );
 
-    $response = $this->communicationService->get('issue/' . $key, $parameters);
+    $response = $this->getCommunicationService()->get('issue/' . $key, $parameters);
 
     if ($response) {
       $response = GenericJiraObject::transformStdClassToGenericJiraObject($response);
