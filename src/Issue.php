@@ -75,7 +75,7 @@ class Issue extends GenericJiraObject implements IGenericJiraObjectRoot {
       $this->persistent = true;
       $this->initialize($initObject);
     }
-
+    
     $this->loaded = $isLoaded;
     $this->subIssues = array();
   }
@@ -410,7 +410,7 @@ class Issue extends GenericJiraObject implements IGenericJiraObjectRoot {
     }
 
     $commentService = CommentService::getCommentService($this->getCommunicationService());
-    
+
     $commentObject = $commentService->create($this->getId());
     $commentObject->setComment($comment);
     return $commentObject->save();
