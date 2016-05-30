@@ -10,7 +10,7 @@ class DiffableObject {
 
 
   /**
-   * Array that stores the name of non-GenericJiraObjects that have been added or changed.
+   * Array that stores the name of non-DiffableObjects / public properties that have been added or changed.
    * @var array
    */
   private $propertyChanges;
@@ -143,7 +143,7 @@ class DiffableObject {
     foreach ($public_properties as $public_property) {
 
       if (is_a($public_property->getValue($this), 'biologis\JIRA_PHP_API\DiffableObject')) {
-        $subDiffObject = $public_property->getValue($this)->createDiffObject();
+        $subDiffObject = $public_property->getValue($this)->createDiffObject($traverseArrays);
 
         // do not store if empty
         if (!empty((array) $subDiffObject)) {
@@ -156,7 +156,7 @@ class DiffableObject {
 
           foreach ($public_property->getValue($this) as $arrayValue) {
             if (is_a($arrayValue, 'biologis\JIRA_PHP_API\DiffableObject')) {
-              $subDiffObject = $arrayValue->createDiffObject();
+              $subDiffObject = $arrayValue->createDiffObject($traverseArrays);
 
               // do not store if empty
               if (!empty((array) $subDiffObject)) {
@@ -165,7 +165,7 @@ class DiffableObject {
             }
           }
 
-          $diffObject->{$public_property->getName()} = $public_property->getValue($this);
+          $diffObject->{$public_property->getName()} = $diffArray;
         }
         elseif (is_array($this->propertyChanges) && in_array($public_property->getName(), $this->propertyChanges)) {
           $diffObject->{$public_property->getName()} = $public_property->getValue($this);

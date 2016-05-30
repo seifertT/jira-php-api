@@ -54,6 +54,14 @@ class Issue extends GenericJiraObject implements IGenericJiraObjectRoot {
 
 
   /**
+   * Currently active transition object (if exists).
+   *
+   * @var \biologis\JIRA_PHP_API\Transition
+   */
+  private $activeTransition;
+
+
+  /**
    * Issue constructor.
    * @param \biologis\JIRA_PHP_API\IssueService $issueService IssueService that generated this issue
    * @param \biologis\JIRA_PHP_API\GenericJiraObject|NULL $initObject this object will be merged into the issue
@@ -66,6 +74,7 @@ class Issue extends GenericJiraObject implements IGenericJiraObjectRoot {
     $this->issueService = $issueService;
     $this->value = array();
     $this->parent = $parent;
+    $this->activeTransition = null;
 
     if ($initObject == null) {
       $this->persistent = false;
@@ -75,7 +84,7 @@ class Issue extends GenericJiraObject implements IGenericJiraObjectRoot {
       $this->persistent = true;
       $this->initialize($initObject);
     }
-    
+
     $this->loaded = $isLoaded;
     $this->subIssues = array();
   }
@@ -414,5 +423,35 @@ class Issue extends GenericJiraObject implements IGenericJiraObjectRoot {
     $commentObject = $commentService->create($this->getId());
     $commentObject->setComment($comment);
     return $commentObject->save();
+  }
+
+
+  /**
+   * Creates a new transition and sets it as the issue's active one.
+   *
+   * @param bool $transitionId
+   * @return \biologis\JIRA_PHP_API\Transition|null
+   */
+  public function newTransition($transitionId = false) {
+    $this->activeTransition = new Transition($this, $transitionId);
+    return $this->activeTransition;
+  }
+
+
+  /**
+   * @return \biologis\JIRA_PHP_API\Transition
+   */
+  public function getActiveTransition() {
+    return $this->activeTransition;
+  }
+
+  /**
+   * Sets the currently active transition to null if a reference to the current instance is given.
+   * @param $transition \biologis\JIRA_PHP_API\Transition
+   */
+  public function deleteActiveTransition($transition) {
+    if ($transition === $this->activeTransition) {
+      $this->activeTransition = null;
+    }
   }
 }
