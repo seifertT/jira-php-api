@@ -134,9 +134,10 @@ class GuzzleCommunicationService implements ICommunicationService {
   /**
    * @param string $path
    * @param \stdClass $data
+   * @param int $expectedStatusCode
    * @return bool|mixed
    */
-  public function post($path, \stdClass $data) {
+  public function post($path, \stdClass $data, $expectedStatusCode = 200) {
     // serialize data
     $data_json = json_encode($data);
 
@@ -152,7 +153,8 @@ class GuzzleCommunicationService implements ICommunicationService {
     try {
       $response = $this->guzzleHTTPClient->request('POST', $path, $options);
 
-      if ($response->getStatusCode() == 201 || $response->getStatusCode() == 200) {
+      // TODO status 201 has to be moved to the appropriate calls of post as parameter
+      if ($response->getStatusCode() == 201 || $response->getStatusCode() == $expectedStatusCode) {
         $response_content = json_decode($response->getBody()->getContents());
         return $response_content;
       }

@@ -31,11 +31,12 @@ interface ICommunicationService {
   /**
    * A POST request is send to the JIRA REST API.
    *
-   * @param $path relative path to JIRA REST URL
+   * @param string $path relative path to JIRA REST URL
    * @param \stdClass $data request that will be send as encoded JSON
+   * @param int $expectedStatusCode statuscode that is expected if the post was successful
    * @return mixed the decoded JSON response or false
    */
-  public function post($path, \stdClass $data);
+  public function post($path, \stdClass $data, $expectedStatusCode);
 
   /**
    * A DELETE request is send to the JIRA REST API.
