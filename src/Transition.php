@@ -13,6 +13,42 @@ class Transition extends DiffableObject {
 
   private $transitionCompleted;
 
+
+  /**
+   * Returns a listing of all available transitions for the given issue.
+   * Either returns the raw answer from JIRA as an stdClass object or an indexed array of objects.
+   * The array has the following format:
+   * array (
+   *   '<TRANSITION-ID>' => <TRANSITION-OBJECT>,
+   *   ...
+   * )
+   *
+   * @param $issue Issue object
+   * @param bool $returnRaw true if raw ansever as stdClass object shall be returned
+   * @return array|\stdClass
+   */
+  public static function getTransitions($issue, $returnRaw = false) {
+    $path = 'issue/' . $issue->getKey() . '/transitions';
+
+    $response = $issue->getCommunicationService()->get($path);
+
+    if (!$response) {
+      return false;
+    }
+
+    if ($returnRaw) {
+      return $response;
+    }
+
+    $transition_array = array();
+
+    foreach ($response->transitions as $transition) {
+      $transition_array[$transition->id] = $transition->to;
+    }
+
+    return $transition_array;
+  }
+
   /**
    * Transition constructor.
    * @param $issue Issue
@@ -107,15 +143,25 @@ class Transition extends DiffableObject {
       return FALSE;
     }
 
-    $diffObject = $this->createDiffObject(true);
+    // get currently available transitions for this issue in this status
+    $transitions = Transition::getTransitions($this->issue);
+
+    if (empty($transitions[$this->transition->getId()])) {
+      return FALSE;
+    }
+
+    $this->createDiffObject(true);
 
     $path = 'issue/' . $issue_identifier . '/transitions';
 
-    $response = $this->issue->getCommunicationService()->post($path, $this->getDiffObject());
+    $response = $this->issue->getCommunicationService()->post($path, $this->getDiffObject(), 204);
 
     if ($response === FALSE) {
       return FALSE;
     }
+
+    // update associated issue
+    $this->issue->fields->status = $transitions[$this->transition->getId()];
 
     $this->transitionCompleted = TRUE;
     $this->issue->deleteActiveTransition($this);
