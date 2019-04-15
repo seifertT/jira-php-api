@@ -186,7 +186,8 @@ class GuzzleCommunicationService implements ICommunicationService {
   public function get($path, $parameters = array()) {
 
     $query_parameters= http_build_query(array_filter($parameters));
-    $relative_path = $path . $query_parameters;
+
+    $relative_path = (!empty($query_parameters)) ? $path  . '?' . $query_parameters : $path;
 
     $options = array();
 
